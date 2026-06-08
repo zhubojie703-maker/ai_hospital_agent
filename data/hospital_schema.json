@@ -1,0 +1,98 @@
+{
+  "database": "hospital.db",
+  "description": "医院运营管理模拟数据库，不含真实患者身份信息。",
+  "date_range": {
+    "start": "2026-03-01",
+    "end": "2026-06-07"
+  },
+  "tables": {
+    "departments": {
+      "description": "科室基础信息",
+      "columns": {
+        "department_id": "科室ID，主键",
+        "department_name": "科室名称",
+        "department_type": "科室类型",
+        "director_name": "科主任姓名，模拟数据",
+        "open_beds": "开放床位数"
+      }
+    },
+    "doctors": {
+      "description": "医生基础信息，姓名为模拟数据",
+      "columns": {
+        "doctor_id": "医生ID，主键",
+        "doctor_name": "医生姓名，模拟数据",
+        "department_id": "所属科室ID",
+        "title": "职称"
+      }
+    },
+    "outpatient_visits": {
+      "description": "门诊记录",
+      "columns": {
+        "visit_id": "门诊记录ID",
+        "patient_id": "脱敏患者ID",
+        "doctor_id": "接诊医生ID",
+        "department_id": "接诊科室ID",
+        "visit_date": "就诊日期",
+        "registration_fee": "挂号费",
+        "diagnosis": "诊断类别，模拟标签"
+      }
+    },
+    "inpatient_records": {
+      "description": "住院记录",
+      "columns": {
+        "inpatient_id": "住院记录ID",
+        "patient_id": "脱敏患者ID",
+        "department_id": "住院科室ID",
+        "admission_date": "入院日期",
+        "discharge_date": "出院日期",
+        "bed_days": "住院天数",
+        "total_cost": "住院总费用",
+        "status": "已出院/在院"
+      }
+    },
+    "billing_records": {
+      "description": "收费明细",
+      "columns": {
+        "bill_id": "收费记录ID",
+        "patient_id": "脱敏患者ID",
+        "department_id": "计费科室ID",
+        "bill_date": "收费日期",
+        "item_type": "费用类别：药品、检查、检验、治疗、手术、耗材、挂号、床位",
+        "item_name": "收费项目名称",
+        "amount": "收费金额"
+      }
+    },
+    "surgery_records": {
+      "description": "手术记录",
+      "columns": {
+        "surgery_id": "手术记录ID",
+        "patient_id": "脱敏患者ID",
+        "department_id": "手术科室ID",
+        "doctor_id": "主刀医生ID",
+        "surgery_date": "手术日期",
+        "surgery_name": "手术名称",
+        "surgery_level": "手术级别",
+        "duration_minutes": "手术时长",
+        "outcome": "转归，模拟标签"
+      }
+    },
+    "bed_daily_stats": {
+      "description": "床位日报",
+      "columns": {
+        "stat_id": "日报ID",
+        "department_id": "科室ID",
+        "stat_date": "统计日期",
+        "open_beds": "开放床位数",
+        "occupied_beds": "占用床位数"
+      }
+    }
+  },
+  "metrics": {
+    "门诊量": "COUNT(outpatient_visits.visit_id)",
+    "科室收入": "SUM(billing_records.amount) GROUP BY department_id",
+    "药品收入占比": "SUM(item_type='药品' 的 amount) / SUM(amount)",
+    "床位使用率": "occupied_beds / open_beds",
+    "平均住院日": "AVG(inpatient_records.bed_days) WHERE status='已出院'",
+    "手术量": "COUNT(surgery_records.surgery_id)"
+  }
+}
