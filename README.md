@@ -55,6 +55,25 @@ python scripts/generate_hospital_data.py
 streamlit run app.py
 ```
 
+## 在线部署
+
+在线演示地址：部署完成后填写。
+
+### Streamlit Community Cloud
+
+- Repository：`zhubojie703-maker/ai_hospital_agent`
+- Branch：`main`
+- Main file path：`app.py`
+- Python dependencies：`requirements.txt`
+
+### Render
+
+项目已包含 `render.yaml`。在 Render 中选择从 GitHub 仓库创建 Web Service 或 Blueprint 后，会使用下面的启动命令：
+
+```bash
+streamlit run app.py --server.address 0.0.0.0 --server.port $PORT --server.headless true
+```
+
 启动桌面小组件：
 
 ```bash
