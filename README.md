@@ -13,6 +13,7 @@
 - 图表可视化：使用 Streamlit 和 Plotly 展示 KPI 卡片、表格、柱状图、饼图和趋势图。
 - 运营简报：自动生成月度医院运营分析报告和管理建议。
 - 桌面小组件：支持置顶、拖动、折叠的 AI 医管桌面小拖件。
+- 前端骨架治理：沉淀页面注册、设计 token、组件复用规则和 Vibe Coding 前端骨架说明。
 
 ## 项目结构
 
@@ -26,7 +27,13 @@ ai_hospital_agent/
 ├── data/
 │   ├── hospital.db
 │   └── hospital_schema.json
+├── docs/
+│   ├── frontend_skeleton.md
+│   ├── optimization_comparison.md
+│   └── ui_upgrade_change_log.md
 ├── hospital_docs/
+├── skills/
+│   └── vibe-frontend-skeleton/
 ├── scripts/
 │   └── generate_hospital_data.py
 └── src/
@@ -90,6 +97,16 @@ python desktop_floating_assistant.py
 | 运营简报 | 月度运营报告和管理建议 |
 | 医管知识库 | 指标口径、医保控费、DRG/DIP、绩效考核文档 |
 | 改动记录 | UI 和内容升级过程表 |
+
+## 前端骨架优化
+
+本项目根据 Vibe Coding “先定前端骨架，再让 AI 写页面”的方法做了二次整理，新增了：
+
+- `UI_TOKENS`：集中管理颜色、圆角、文字色和图表色板。
+- `PAGE_REGISTRY`：统一维护页面名称、模块名和页面用途。
+- `render_current_page`：用页面渲染表替代分散的条件路由。
+- `docs/frontend_skeleton.md`：记录设计风格、技术骨架、页面边界和组件复用规则。
+- `skills/vibe-frontend-skeleton`：把参考视频蒸馏成可复用 Codex skill，项目下载后也能带走这套前端骨架方法。
 
 ## 公开依据与数据说明
 

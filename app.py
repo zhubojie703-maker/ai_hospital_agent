@@ -18,12 +18,72 @@ from src.sql_agent import HospitalSQLAgent
 
 DB_PATH = Path("data/hospital.db")
 
-GREEN = "#34d66f"
-BLUE = "#4f8cff"
-CYAN = "#58d4d8"
-YELLOW = "#f6c85f"
-RED = "#ff6370"
-TEXT = "#edf6f1"
+UI_TOKENS = {
+    "bg": "#07110f",
+    "card": "#111a17",
+    "border": "#24372f",
+    "text": "#edf6f1",
+    "muted": "#8fa39a",
+    "green": "#34d66f",
+    "green_soft": "#143626",
+    "blue": "#4f8cff",
+    "cyan": "#58d4d8",
+    "yellow": "#f6c85f",
+    "red": "#ff6370",
+    "purple": "#9b7cff",
+    "radius": "8px",
+}
+GREEN = UI_TOKENS["green"]
+BLUE = UI_TOKENS["blue"]
+CYAN = UI_TOKENS["cyan"]
+YELLOW = UI_TOKENS["yellow"]
+RED = UI_TOKENS["red"]
+TEXT = UI_TOKENS["text"]
+CHART_COLORS = [GREEN, BLUE, CYAN, YELLOW, RED, UI_TOKENS["purple"]]
+
+PAGE_REGISTRY = [
+    {
+        "label": "运营总览",
+        "module": "dashboard",
+        "purpose": "管理层首屏，集中查看 KPI、风险和关键趋势",
+    },
+    {
+        "label": "浮窗问答",
+        "module": "floating_qa",
+        "purpose": "页面内轻量 AI 入口，输入后再展开图表结果",
+    },
+    {
+        "label": "智能问答",
+        "module": "qa",
+        "purpose": "自然语言查询、知识库解释和报告生成",
+    },
+    {
+        "label": "趋势分析",
+        "module": "trends",
+        "purpose": "按时间观察门诊、收入、床位和手术变化",
+    },
+    {
+        "label": "科室绩效",
+        "module": "departments",
+        "purpose": "横向比较科室收入、工作量、床位和费用结构",
+    },
+    {
+        "label": "运营简报",
+        "module": "report",
+        "purpose": "生成管理层可读的月度运营简报",
+    },
+    {
+        "label": "医管知识库",
+        "module": "knowledge",
+        "purpose": "解释指标口径、医保控费、DRG/DIP 和绩效规则",
+    },
+    {
+        "label": "改动记录",
+        "module": "change_log",
+        "purpose": "展示产品升级过程、页面骨架和差异对比",
+    },
+]
+PAGE_LABELS = [page["label"] for page in PAGE_REGISTRY]
 
 EXAMPLES = [
     "本月门诊量最高的5个科室是哪些？",
@@ -110,6 +170,12 @@ CHANGE_LOG = [
         "本项目改动": "新增改动记录页和文档化过程表",
         "效果": "方便写简历、讲项目升级路径",
     },
+    {
+        "阶段": "7. 前端骨架化",
+        "参考界面特征": "先定风格、技术方案、模块边界和组件复用规则，再让 AI 写页面",
+        "本项目改动": "沉淀页面注册表、设计 token、组件规则和前端骨架文档",
+        "效果": "页面扩展时更容易保持同一套医管后台风格",
+    },
 ]
 
 
@@ -128,7 +194,11 @@ def inject_css() -> None:
             --muted: #8fa39a;
             --green: #34d66f;
             --green-soft: #143626;
+            --blue: #4f8cff;
+            --cyan: #58d4d8;
+            --yellow: #f6c85f;
             --red: #ff6370;
+            --radius: 8px;
         }
 
         .stApp {
@@ -240,7 +310,7 @@ def inject_css() -> None:
             min-height: 132px;
             padding: 18px 18px 14px 18px;
             border: 1px solid var(--border);
-            border-radius: 8px;
+            border-radius: var(--radius);
             background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.015)), var(--card);
             box-shadow: 0 18px 48px rgba(0,0,0,0.22);
         }
@@ -277,14 +347,14 @@ def inject_css() -> None:
         .assistant-card {
             border: 1px solid var(--border);
             background: linear-gradient(180deg, rgba(52,214,111,0.08), rgba(17,26,23,0.96));
-            border-radius: 8px;
+            border-radius: var(--radius);
             padding: 18px;
         }
 
         .float-stage {
             min-height: 560px;
             border: 1px solid var(--border);
-            border-radius: 8px;
+            border-radius: var(--radius);
             padding: 22px;
             background:
                 radial-gradient(circle at 18% 20%, rgba(52,214,111,0.18), transparent 32%),
@@ -294,7 +364,7 @@ def inject_css() -> None:
 
         .float-window {
             border: 1px solid rgba(52,214,111,0.28);
-            border-radius: 8px;
+            border-radius: var(--radius);
             padding: 18px;
             background: rgba(13,23,20,0.96);
             box-shadow: 0 24px 80px rgba(0,0,0,0.35);
@@ -315,7 +385,7 @@ def inject_css() -> None:
 
         .float-result {
             border: 1px solid rgba(52,214,111,0.18);
-            border-radius: 8px;
+            border-radius: var(--radius);
             padding: 18px;
             background: rgba(17,26,23,0.92);
             box-shadow: 0 24px 80px rgba(0,0,0,0.28);
@@ -332,7 +402,7 @@ def inject_css() -> None:
             border: 1px solid rgba(52,214,111,0.18);
             background: rgba(10,20,17,0.8);
             padding: 12px 14px;
-            border-radius: 8px;
+            border-radius: var(--radius);
             margin: 10px 0;
         }
 
@@ -348,7 +418,7 @@ def inject_css() -> None:
         }
 
         .stButton > button {
-            border-radius: 8px;
+            border-radius: var(--radius);
             border: 1px solid rgba(52,214,111,0.35);
             background: var(--green);
             color: #04100b;
@@ -362,7 +432,7 @@ def inject_css() -> None:
 
         div[data-testid="stDataFrame"] {
             border: 1px solid var(--border);
-            border-radius: 8px;
+            border-radius: var(--radius);
             overflow: hidden;
             background: var(--card);
         }
@@ -493,7 +563,7 @@ def style_fig(fig: go.Figure, height: int = 330) -> go.Figure:
         font=dict(color=TEXT, size=12),
         margin=dict(l=24, r=18, t=42, b=26),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
-        colorway=[GREEN, BLUE, CYAN, YELLOW, RED, "#9b7cff"],
+        colorway=CHART_COLORS,
     )
     fig.update_xaxes(gridcolor="rgba(143,163,154,0.12)", zerolinecolor="rgba(143,163,154,0.18)")
     fig.update_yaxes(gridcolor="rgba(143,163,154,0.12)", zerolinecolor="rgba(143,163,154,0.18)")
@@ -1068,6 +1138,11 @@ def render_knowledge() -> None:
 def render_change_log() -> None:
     render_header("改动记录", "本次基于参考 UI 对项目做的页面和内容升级。", "过程表")
     st.dataframe(pd.DataFrame(CHANGE_LOG), width="stretch", hide_index=True, height=340)
+    section_title("页面骨架", "Vibe Skeleton")
+    page_df = pd.DataFrame(PAGE_REGISTRY).rename(
+        columns={"label": "页面", "module": "模块名", "purpose": "页面职责"}
+    )
+    st.dataframe(page_df, width="stretch", hide_index=True, height=280)
     st.markdown(
         """
         ### 升级前后差异
@@ -1091,7 +1166,7 @@ def render_sidebar() -> str:
     )
     page = st.sidebar.radio(
         "导航",
-        ["运营总览", "浮窗问答", "智能问答", "趋势分析", "科室绩效", "运营简报", "医管知识库", "改动记录"],
+        PAGE_LABELS,
         label_visibility="collapsed",
     )
     st.sidebar.markdown("---")
@@ -1102,23 +1177,21 @@ def render_sidebar() -> str:
     return page
 
 
+def render_current_page(page: str) -> None:
+    page_renderers = {
+        "运营总览": render_dashboard,
+        "浮窗问答": render_floating_qa,
+        "智能问答": render_qa,
+        "趋势分析": render_trends,
+        "科室绩效": render_department_page,
+        "运营简报": render_report,
+        "医管知识库": render_knowledge,
+        "改动记录": render_change_log,
+    }
+    page_renderers.get(page, render_change_log)()
+
+
 inject_css()
 sql_agent, kb, report_generator = get_agents()
 page = render_sidebar()
-
-if page == "运营总览":
-    render_dashboard()
-elif page == "浮窗问答":
-    render_floating_qa()
-elif page == "智能问答":
-    render_qa()
-elif page == "趋势分析":
-    render_trends()
-elif page == "科室绩效":
-    render_department_page()
-elif page == "运营简报":
-    render_report()
-elif page == "医管知识库":
-    render_knowledge()
-else:
-    render_change_log()
+render_current_page(page)
