@@ -1,0 +1,4 @@
+interface:
+  display_name: "Vibe Frontend Skeleton"
+  short_description: "Plan a frontend skeleton before AI coding."
+  default_prompt: "Use the Vibe frontend skeleton workflow to define UI style, tech choices, module boundaries, component reuse, design tokens, and implementation plan before changing a frontend project."
