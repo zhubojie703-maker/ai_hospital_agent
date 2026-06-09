@@ -57,7 +57,7 @@ streamlit run app.py
 
 ## 在线部署
 
-在线演示地址：部署完成后填写。
+在线演示地址：<https://ai-hospital-agent.streamlit.app/>
 
 ### Streamlit Community Cloud
 
