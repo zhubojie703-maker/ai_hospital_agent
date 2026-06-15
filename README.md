@@ -11,6 +11,7 @@
 - 医院管理知识库：解释指标口径、绩效管理、医保控费和手术分级。
 - 医管后台驾驶舱：运营总览、趋势分析、科室绩效、智能问答、知识库和改动记录。
 - 图表可视化：使用 Streamlit 和 Plotly 展示 KPI 卡片、表格、柱状图、饼图和趋势图。
+- 医保控费观察：基于模拟 DRG/DIP 病组、模拟支付标准和病例费用记录，生成科室风险评分。
 - 运营简报：自动生成月度医院运营分析报告和管理建议。
 - 桌面小组件：支持置顶、拖动、折叠的 AI 医管桌面小拖件。
 - 前端骨架治理：沉淀页面注册、设计 token、组件复用规则和 Vibe Coding 前端骨架说明。
@@ -30,6 +31,9 @@ ai_hospital_agent/
 ├── docs/
 │   ├── frontend_skeleton.md
 │   ├── optimization_comparison.md
+│   ├── project_experience_updates.md
+│   ├── product_landing_plan.md
+│   ├── product_review_checklist.md
 │   └── ui_upgrade_change_log.md
 ├── hospital_docs/
 ├── skills/
@@ -113,6 +117,7 @@ python desktop_floating_assistant.py
 | 智能问答 | 自然语言查询、RAG 指标解释、报告生成 |
 | 趋势分析 | 近 60 天门诊与收入趋势、费用结构、床位排名、手术级别分布 |
 | 科室绩效 | 科室工作量、收入、药品/耗材占比、床位效率对比 |
+| 医保控费观察 | 模拟 DRG/DIP 病组、科室风险评分、费用超支病例和边界说明 |
 | 运营简报 | 月度运营报告和管理建议 |
 | 医管知识库 | 指标口径、医保控费、DRG/DIP、绩效考核文档 |
 | 改动记录 | UI 和内容升级过程表 |
@@ -137,6 +142,10 @@ python desktop_floating_assistant.py
 
 由于真实 HIS、财务、医保和病案首页数据涉及隐私与机构授权，本 Demo 使用模拟数据生成器创建 `hospital.db`。模拟数据只用于展示系统逻辑，不能代表真实医院经营水平。
 
+### DRG/DIP 边界说明
+
+本项目新增的“医保控费观察”是轻量模拟模块：它使用模拟病组、模拟支付标准和模拟病例费用记录，展示如何把医院运营数据转化为风险评分和管理复核线索。它不做正式 DRG/DIP 入组、医保结算预测或医保审核判断。真实落地需要接入病案首页、医保结算清单、诊断/手术编码、本地分组规则、支付标准和病例成本。
+
 ## 优化对比
 
 | 对比项 | 原 Text-to-SQL 项目 | 优化后的 AI 医管智能体 |
@@ -147,6 +156,7 @@ python desktop_floating_assistant.py
 | 安全约束 | Prompt 中要求只查数据 | 独立 SQL Guard 强制只允许 SELECT，拦截危险 SQL，自动补 LIMIT |
 | 知识问答 | 无制度知识库 | `hospital_docs` 支持指标解释、政策和绩效制度问答 |
 | 分析能力 | 主要返回查询结果 | 返回数据表、异常提示和管理建议 |
+| 风险观察 | 无 | 模拟 DRG/DIP 病组 + 科室风险评分 + 控费边界说明 |
 | 可视化 | 命令行输出 | Streamlit 表格 + Plotly 图表 |
 | 报告能力 | 无 | 自动生成医院运营月度简报 |
-| 简历表达 | Text-to-SQL Demo | Text-to-SQL + RAG + Router + SQL 安全 + 医管分析智能体 |
+| 简历表达 | Text-to-SQL Demo | Text-to-SQL + RAG + Router + SQL 安全 + 医管分析 + 医保控费观察 |

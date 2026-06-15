@@ -42,6 +42,25 @@ ITEM_TYPES = ["药品", "检查", "检验", "治疗", "手术", "耗材", "挂�
 SURGERY_NAMES = ["腹腔镜胆囊切除术", "阑尾切除术", "剖宫产术", "骨折内固定术", "冠脉介入术", "清创缝合术"]
 SURGERY_LEVELS = ["一级", "二级", "三级", "四级"]
 
+DRG_GROUPS = [
+    ("IM01", "内科慢病综合治疗", "内科", 9800, 9000, 7.0, "中"),
+    ("IM02", "肺炎及呼吸系统治疗", "内科", 11800, 10800, 8.0, "中"),
+    ("GS01", "普外科腹腔镜手术", "外科", 16800, 15200, 7.0, "中"),
+    ("GS02", "普外科复杂手术治疗", "外科", 23800, 21400, 10.0, "高"),
+    ("PD01", "儿科呼吸道感染治疗", "儿科", 6200, 5600, 5.0, "低"),
+    ("OB01", "妇产科分娩与围产管理", "妇产科", 12800, 11600, 6.0, "中"),
+    ("IC01", "重症监护综合治疗", "ICU", 42000, 38500, 12.0, "高"),
+    ("OR01", "骨科骨折内固定治疗", "骨科", 25800, 23100, 10.0, "高"),
+    ("CV01", "心血管内科介入治疗", "心血管内科", 28800, 26200, 8.0, "高"),
+    ("CV02", "心力衰竭内科治疗", "心血管内科", 18600, 17100, 9.0, "中"),
+]
+
+DRG_RISK_RULES = [
+    (1, "费用超出模拟支付标准", "病例总费用高于模拟支付标准，提示经营亏损或费用结构需复核", 3),
+    (2, "住院日偏长", "病例住院日超过模拟病组期望住院日 2 天以上，提示流程或病情复杂度需复核", 2),
+    (3, "高风险病组亏损", "高风险病组同时出现模拟亏损，需联动医保办、病案室和临床科室复核", 3),
+]
+
 
 def daterange(start: date, end: date):
     current = start
@@ -60,6 +79,9 @@ def create_tables(conn: sqlite3.Connection) -> None:
         "billing_records",
         "surgery_records",
         "bed_daily_stats",
+        "drg_groups",
+        "case_drg_records",
+        "drg_risk_rules",
     ):
         cursor.execute(f"DROP TABLE IF EXISTS {table}")
 
@@ -158,6 +180,57 @@ def create_tables(conn: sqlite3.Connection) -> None:
         )
         """
     )
+    cursor.execute(
+        """
+        CREATE TABLE drg_groups (
+            drg_code TEXT PRIMARY KEY,
+            drg_name TEXT NOT NULL,
+            department_name TEXT NOT NULL,
+            standard_payment REAL NOT NULL,
+            average_cost REAL NOT NULL,
+            expected_los REAL NOT NULL,
+            risk_level TEXT NOT NULL
+        )
+        """
+    )
+    cursor.execute(
+        """
+        CREATE TABLE case_drg_records (
+            case_id INTEGER PRIMARY KEY,
+            inpatient_id INTEGER NOT NULL,
+            patient_id INTEGER NOT NULL,
+            department_id INTEGER NOT NULL,
+            drg_code TEXT NOT NULL,
+            settlement_month TEXT NOT NULL,
+            total_cost REAL NOT NULL,
+            estimated_payment REAL NOT NULL,
+            profit_loss REAL NOT NULL,
+            length_of_stay INTEGER NOT NULL,
+            cost_overrun_rate REAL NOT NULL,
+            risk_flag TEXT NOT NULL,
+            risk_reason TEXT NOT NULL,
+            FOREIGN KEY(inpatient_id) REFERENCES inpatient_records(inpatient_id),
+            FOREIGN KEY(department_id) REFERENCES departments(department_id),
+            FOREIGN KEY(drg_code) REFERENCES drg_groups(drg_code)
+        )
+        """
+    )
+    cursor.execute(
+        """
+        CREATE TABLE drg_risk_rules (
+            rule_id INTEGER PRIMARY KEY,
+            rule_name TEXT NOT NULL,
+            condition_desc TEXT NOT NULL,
+            risk_weight INTEGER NOT NULL
+        )
+        """
+    )
+
+
+def insert_drg_reference_data(conn: sqlite3.Connection) -> None:
+    cursor = conn.cursor()
+    cursor.executemany("INSERT INTO drg_groups VALUES (?, ?, ?, ?, ?, ?, ?)", DRG_GROUPS)
+    cursor.executemany("INSERT INTO drg_risk_rules VALUES (?, ?, ?, ?)", DRG_RISK_RULES)
 
 
 def insert_departments_and_doctors(conn: sqlite3.Connection) -> list[tuple[int, str, int, str]]:
@@ -245,15 +318,20 @@ def insert_inpatient_surgery_and_beds(conn: sqlite3.Connection, doctors: list[tu
     doctors_by_department: dict[int, list[tuple[int, str, int, str]]] = {}
     for doctor in doctors:
         doctors_by_department.setdefault(doctor[2], []).append(doctor)
+    drg_groups_by_department: dict[str, list[tuple[str, str, str, float, float, float, str]]] = {}
+    for group in DRG_GROUPS:
+        drg_groups_by_department.setdefault(group[2], []).append(group)
 
     bill_id = get_next_bill_id(conn)
     inpatient_id = 1
     surgery_id = 1
+    case_id = 1
     patient_id = 50000
     inpatient_rows = []
     bill_rows = []
     surgery_rows = []
     bed_rows = []
+    case_drg_rows = []
     bed_stat_id = 1
 
     for current in daterange(START_DATE, END_DATE):
@@ -287,6 +365,42 @@ def insert_inpatient_surgery_and_beds(conn: sqlite3.Connection, doctors: list[tu
                         status,
                     )
                 )
+                drg_group = random.choice(drg_groups_by_department.get(dept_name, DRG_GROUPS[:2]))
+                drg_code, _, _, standard_payment, _, expected_los, group_risk = drg_group
+                estimated_payment = round(standard_payment * random.uniform(0.94, 1.06), 2)
+                profit_loss = round(estimated_payment - total_cost, 2)
+                cost_overrun_rate = round((total_cost - estimated_payment) * 100.0 / estimated_payment, 2)
+                risk_reasons = []
+                if profit_loss < 0:
+                    risk_reasons.append("费用超出模拟支付标准")
+                if bed_days > expected_los + 2:
+                    risk_reasons.append("住院日偏长")
+                if group_risk == "高" and profit_loss < 0:
+                    risk_reasons.append("高风险病组亏损")
+                if cost_overrun_rate > 10 or (group_risk == "高" and profit_loss < 0):
+                    risk_flag = "高风险"
+                elif risk_reasons:
+                    risk_flag = "关注"
+                else:
+                    risk_flag = "正常"
+                case_drg_rows.append(
+                    (
+                        case_id,
+                        inpatient_id,
+                        patient_id,
+                        dept_id,
+                        drg_code,
+                        current.strftime("%Y-%m"),
+                        total_cost,
+                        estimated_payment,
+                        profit_loss,
+                        bed_days,
+                        cost_overrun_rate,
+                        risk_flag,
+                        "；".join(risk_reasons) if risk_reasons else "未触发模拟控费风险",
+                    )
+                )
+                case_id += 1
 
                 for item_type in ["床位", "药品", "检查", "检验", "治疗", "耗材"]:
                     amount = {
@@ -348,6 +462,10 @@ def insert_inpatient_surgery_and_beds(conn: sqlite3.Connection, doctors: list[tu
     cursor.executemany("INSERT INTO billing_records VALUES (?, ?, ?, ?, ?, ?, ?)", bill_rows)
     cursor.executemany("INSERT INTO surgery_records VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", surgery_rows)
     cursor.executemany("INSERT INTO bed_daily_stats VALUES (?, ?, ?, ?, ?)", bed_rows)
+    cursor.executemany(
+        "INSERT INTO case_drg_records VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        case_drg_rows,
+    )
 
 
 def write_schema() -> None:
@@ -436,6 +554,45 @@ def write_schema() -> None:
                     "occupied_beds": "占用床位数",
                 },
             },
+            "drg_groups": {
+                "description": "模拟 DRG/DIP 病组参考表，用于展示医保控费观察，不代表正式医保分组规则",
+                "columns": {
+                    "drg_code": "模拟病组编码",
+                    "drg_name": "模拟病组名称",
+                    "department_name": "主要关联科室",
+                    "standard_payment": "模拟支付标准",
+                    "average_cost": "模拟平均成本",
+                    "expected_los": "模拟期望住院日",
+                    "risk_level": "病组经营风险等级",
+                },
+            },
+            "case_drg_records": {
+                "description": "模拟病例 DRG/DIP 观察记录，用于展示费用超支、住院日偏长和模拟亏损风险",
+                "columns": {
+                    "case_id": "模拟病例观察记录ID",
+                    "inpatient_id": "关联住院记录ID",
+                    "patient_id": "脱敏患者ID",
+                    "department_id": "科室ID",
+                    "drg_code": "模拟病组编码",
+                    "settlement_month": "模拟结算月份",
+                    "total_cost": "病例总费用",
+                    "estimated_payment": "模拟医保支付金额",
+                    "profit_loss": "模拟盈亏，支付金额减病例总费用",
+                    "length_of_stay": "住院日",
+                    "cost_overrun_rate": "费用超支率",
+                    "risk_flag": "正常/关注/高风险",
+                    "risk_reason": "模拟风险原因",
+                },
+            },
+            "drg_risk_rules": {
+                "description": "医保控费观察规则说明表，用于解释风险评分依据",
+                "columns": {
+                    "rule_id": "规则ID",
+                    "rule_name": "规则名称",
+                    "condition_desc": "触发条件说明",
+                    "risk_weight": "风险权重",
+                },
+            },
         },
         "metrics": {
             "门诊量": "COUNT(outpatient_visits.visit_id)",
@@ -444,6 +601,8 @@ def write_schema() -> None:
             "床位使用率": "occupied_beds / open_beds",
             "平均住院日": "AVG(inpatient_records.bed_days) WHERE status='已出院'",
             "手术量": "COUNT(surgery_records.surgery_id)",
+            "模拟DRG/DIP亏损": "SUM(CASE WHEN case_drg_records.profit_loss < 0 THEN ABS(profit_loss) ELSE 0 END)",
+            "模拟费用超支病例数": "COUNT(case_drg_records.case_id) WHERE profit_loss < 0",
         },
     }
     SCHEMA_PATH.write_text(json.dumps(schema, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -454,6 +613,7 @@ def create_database() -> None:
     DATA_DIR.mkdir(exist_ok=True)
     with sqlite3.connect(DB_PATH) as conn:
         create_tables(conn)
+        insert_drg_reference_data(conn)
         doctors = insert_departments_and_doctors(conn)
         insert_outpatient_visits(conn, doctors)
         insert_inpatient_surgery_and_beds(conn, doctors)

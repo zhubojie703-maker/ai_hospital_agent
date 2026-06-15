@@ -85,6 +85,45 @@
         "open_beds": "开放床位数",
         "occupied_beds": "占用床位数"
       }
+    },
+    "drg_groups": {
+      "description": "模拟 DRG/DIP 病组参考表，用于展示医保控费观察，不代表正式医保分组规则",
+      "columns": {
+        "drg_code": "模拟病组编码",
+        "drg_name": "模拟病组名称",
+        "department_name": "主要关联科室",
+        "standard_payment": "模拟支付标准",
+        "average_cost": "模拟平均成本",
+        "expected_los": "模拟期望住院日",
+        "risk_level": "病组经营风险等级"
+      }
+    },
+    "case_drg_records": {
+      "description": "模拟病例 DRG/DIP 观察记录，用于展示费用超支、住院日偏长和模拟亏损风险",
+      "columns": {
+        "case_id": "模拟病例观察记录ID",
+        "inpatient_id": "关联住院记录ID",
+        "patient_id": "脱敏患者ID",
+        "department_id": "科室ID",
+        "drg_code": "模拟病组编码",
+        "settlement_month": "模拟结算月份",
+        "total_cost": "病例总费用",
+        "estimated_payment": "模拟医保支付金额",
+        "profit_loss": "模拟盈亏，支付金额减病例总费用",
+        "length_of_stay": "住院日",
+        "cost_overrun_rate": "费用超支率",
+        "risk_flag": "正常/关注/高风险",
+        "risk_reason": "模拟风险原因"
+      }
+    },
+    "drg_risk_rules": {
+      "description": "医保控费观察规则说明表，用于解释风险评分依据",
+      "columns": {
+        "rule_id": "规则ID",
+        "rule_name": "规则名称",
+        "condition_desc": "触发条件说明",
+        "risk_weight": "风险权重"
+      }
     }
   },
   "metrics": {
@@ -93,6 +132,8 @@
     "药品收入占比": "SUM(item_type='药品' 的 amount) / SUM(amount)",
     "床位使用率": "occupied_beds / open_beds",
     "平均住院日": "AVG(inpatient_records.bed_days) WHERE status='已出院'",
-    "手术量": "COUNT(surgery_records.surgery_id)"
+    "手术量": "COUNT(surgery_records.surgery_id)",
+    "模拟DRG/DIP亏损": "SUM(CASE WHEN case_drg_records.profit_loss < 0 THEN ABS(profit_loss) ELSE 0 END)",
+    "模拟费用超支病例数": "COUNT(case_drg_records.case_id) WHERE profit_loss < 0"
   }
 }

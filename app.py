@@ -12,6 +12,7 @@ import streamlit as st
 from src.charts import make_chart
 from src.rag_agent import HospitalKnowledgeBase
 from src.report_generator import HospitalReportGenerator
+from src.risk_scoring import MedicalInsuranceRiskScorer
 from src.router import route_question
 from src.sql_agent import HospitalSQLAgent
 
@@ -66,6 +67,11 @@ PAGE_REGISTRY = [
         "label": "科室绩效",
         "module": "departments",
         "purpose": "横向比较科室收入、工作量、床位和费用结构",
+    },
+    {
+        "label": "医保控费观察",
+        "module": "insurance_risk",
+        "purpose": "用模拟 DRG/DIP 数据观察科室经营与控费风险",
     },
     {
         "label": "运营简报",
@@ -131,6 +137,19 @@ COLUMN_LABELS = {
     "item_type": "费用类别",
     "amount": "金额",
     "ratio": "占比",
+    "risk_score": "风险分",
+    "risk_level": "风险等级",
+    "triggered_risks": "命中风险项",
+    "suggested_action": "建议动作",
+    "case_count": "模拟病例数",
+    "simulated_drg_loss": "模拟DRG/DIP亏损",
+    "overrun_case_count": "费用超支病例数",
+    "high_risk_case_count": "高风险病例数",
+    "drg_code": "病组编码",
+    "drg_name": "模拟病组",
+    "avg_total_cost": "平均总费用",
+    "avg_estimated_payment": "平均模拟支付",
+    "simulated_profit_loss": "模拟盈亏",
 }
 
 CHANGE_LOG = [
@@ -175,6 +194,12 @@ CHANGE_LOG = [
         "参考界面特征": "先定风格、技术方案、模块边界和组件复用规则，再让 AI 写页面",
         "本项目改动": "沉淀页面注册表、设计 token、组件规则和前端骨架文档",
         "效果": "页面扩展时更容易保持同一套医管后台风格",
+    },
+    {
+        "阶段": "8. 医保控费观察",
+        "参考界面特征": "风险评分、科室排行、病组盈亏和边界说明",
+        "本项目改动": "新增模拟 DRG/DIP 数据、科室风险评分和医保控费观察页",
+        "效果": "从运营看板升级为能解释控费风险的产品原型",
     },
 ]
 
@@ -453,7 +478,8 @@ def get_agents():
     sql_agent = HospitalSQLAgent()
     kb = HospitalKnowledgeBase()
     report_generator = HospitalReportGenerator(sql_agent)
-    return sql_agent, kb, report_generator
+    risk_scorer = MedicalInsuranceRiskScorer(DB_PATH)
+    return sql_agent, kb, report_generator, risk_scorer
 
 
 @st.cache_data(ttl=60)
@@ -513,6 +539,16 @@ RECENT_START = LATEST_DATE - timedelta(days=6)
 TREND_START = LATEST_DATE - timedelta(days=60)
 
 
+def risk_date_window() -> tuple[str, str, str, str]:
+    recent_end = LATEST_DATE + timedelta(days=1)
+    return (
+        MONTH_START.isoformat(),
+        MONTH_END.isoformat(),
+        RECENT_START.isoformat(),
+        recent_end.isoformat(),
+    )
+
+
 def fmt_int(value: float) -> str:
     return f"{int(round(value)):,}"
 
@@ -542,6 +578,19 @@ def render_metric(label: str, value: str, delta: float, suffix: str = "较上月
             <div class="metric-label">{label}</div>
             <div class="metric-value">{value}</div>
             <div class="metric-trend">{suffix} <span class="{cls}">{sign}{delta:.1f}%</span></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_static_metric(label: str, value: str, caption: str) -> None:
+    st.markdown(
+        f"""
+        <div class="metric-card">
+            <div class="metric-label">{label}</div>
+            <div class="metric-value">{value}</div>
+            <div class="metric-trend">{caption}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -1111,6 +1160,111 @@ def render_department_page() -> None:
     st.dataframe(perf.rename(columns=COLUMN_LABELS), width="stretch", hide_index=True, height=420)
 
 
+def render_insurance_risk() -> None:
+    render_header(
+        "医保控费观察",
+        "基于模拟 DRG/DIP 病组和病例费用记录，观察科室经营风险；不做正式医保结算预测。",
+        "轻量风控",
+    )
+    month_start, month_end, recent_start, recent_end = risk_date_window()
+    summary = risk_scorer.get_risk_summary(month_start, month_end, recent_start, recent_end)
+    scores = pd.DataFrame(
+        risk_scorer.get_department_risk_scores(month_start, month_end, recent_start, recent_end)
+    )
+    groups = pd.DataFrame(risk_scorer.get_drg_group_summary(month_start, limit=8))
+
+    cols = st.columns(4)
+    with cols[0]:
+        render_static_metric("高风险科室", fmt_int(summary["high_risk_department_count"]), "模拟评分 >= 6 分")
+    with cols[1]:
+        render_static_metric("模拟DRG/DIP亏损", fmt_money(summary["simulated_drg_loss"]), "仅用于控费观察")
+    with cols[2]:
+        render_static_metric("费用超支病例", fmt_int(summary["overrun_case_count"]), "支付金额低于病例费用")
+    with cols[3]:
+        render_static_metric("重点关注病例", fmt_int(summary["high_risk_case_count"]), "命中高风险规则")
+
+    st.caption(
+        "边界说明：本页使用模拟病组、模拟支付标准和模拟病例费用做风险观察，不代表正式 DRG/DIP 入组、结算或医保审核结果。"
+    )
+
+    left, right = st.columns([1.35, 1])
+    with left:
+        section_title("科室风险排行", "本月")
+        if scores.empty:
+            st.info("暂无医保控费观察数据。")
+        else:
+            risk_fig = px.bar(
+                scores.head(8),
+                x="department_name",
+                y="risk_score",
+                color="risk_level",
+                color_discrete_map={"高": RED, "中": YELLOW, "低": GREEN},
+                labels={"department_name": "科室", "risk_score": "风险分", "risk_level": "风险等级"},
+            )
+            st.plotly_chart(style_fig(risk_fig, 340), width="stretch")
+
+    with right:
+        if scores.empty:
+            bullets = ["当前没有可展示的科室风险。"]
+        else:
+            top = scores.iloc[0]
+            bullets = [
+                f"{top.department_name} 当前风险分 {int(top.risk_score)}，命中：{top.triggered_risks}。",
+                f"本月模拟 DRG/DIP 亏损合计 {fmt_money(summary['simulated_drg_loss'])}，建议优先复核费用超支病例。",
+                "该模块用于展示产品落地思路，真实上线需接入病案首页、医保结算清单和本地分组规则。",
+            ]
+        render_assistant_panel(
+            "控费观察解读",
+            bullets,
+            ["风险排行", "模拟亏损", "边界说明"],
+        )
+
+    col_a, col_b = st.columns([1, 1])
+    with col_a:
+        section_title("DRG/DIP 病组模拟盈亏", "观察")
+        if groups.empty:
+            st.info("暂无模拟病组数据。")
+        else:
+            group_fig = px.bar(
+                groups,
+                x="drg_name",
+                y="simulated_profit_loss",
+                color="risk_level",
+                color_discrete_map={"高": RED, "中": YELLOW, "低": GREEN},
+                labels={"drg_name": "模拟病组", "simulated_profit_loss": "模拟盈亏", "risk_level": "病组风险"},
+            )
+            st.plotly_chart(style_fig(group_fig, 380), width="stretch")
+    with col_b:
+        section_title("病组观察明细", "模拟数据")
+        if groups.empty:
+            st.info("暂无模拟病组数据。")
+        else:
+            st.dataframe(groups.rename(columns=COLUMN_LABELS), width="stretch", hide_index=True, height=380)
+
+    section_title("科室风险明细", "可评审表")
+    if not scores.empty:
+        display_cols = [
+            "department_name",
+            "risk_score",
+            "risk_level",
+            "triggered_risks",
+            "simulated_drg_loss",
+            "overrun_case_count",
+            "high_risk_case_count",
+            "drug_ratio",
+            "material_ratio",
+            "avg_bed_occupancy_rate",
+            "avg_length_of_stay",
+            "suggested_action",
+        ]
+        st.dataframe(
+            scores[display_cols].rename(columns=COLUMN_LABELS),
+            width="stretch",
+            hide_index=True,
+            height=360,
+        )
+
+
 def render_report() -> None:
     render_header("运营简报", "自动生成适合医院管理层阅读的月度运营报告。", "报告生成")
     report_col, assistant_col = st.columns([2, 1])
@@ -1184,6 +1338,7 @@ def render_current_page(page: str) -> None:
         "智能问答": render_qa,
         "趋势分析": render_trends,
         "科室绩效": render_department_page,
+        "医保控费观察": render_insurance_risk,
         "运营简报": render_report,
         "医管知识库": render_knowledge,
         "改动记录": render_change_log,
@@ -1192,6 +1347,6 @@ def render_current_page(page: str) -> None:
 
 
 inject_css()
-sql_agent, kb, report_generator = get_agents()
+sql_agent, kb, report_generator, risk_scorer = get_agents()
 page = render_sidebar()
 render_current_page(page)
